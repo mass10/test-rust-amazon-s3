@@ -1,3 +1,3 @@
-# test-rust-amazon-s3
+# About
 
-* rusoto_s3 example
+* rusoto_s3 example (WIP)
