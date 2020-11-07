@@ -8,83 +8,142 @@ extern crate rusoto_s3;
 
 mod lib;
 
-fn get_s3_client() -> rusoto_s3::S3Client {
-	return rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
+#[derive(Debug, Clone)]
+pub struct MyStringError {
+	pub message: String,
+	// pub line: usize,
+	// pub column: usize,
 }
 
-async fn list_objects(s3: &dyn rusoto_s3::S3) {
-	let request = rusoto_s3::ListObjectsRequest::default();
-	let result = s3.list_objects(request);
-	let result = result.await;
-	if result.is_err() {
-		println!("[ERROR] {:?}", result.err().unwrap());
-		return;
+impl std::fmt::Display for MyStringError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+		write!(f, "{}", self.message)
 	}
-	let result = result.ok().unwrap();
-	println!("{:?}", result);
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_must_use)]
-async fn put_object_example() -> std::result::Result<(), Box<dyn std::error::Error>> {
-	// セットアップ
-	let user_profile_dir = std::env::var("USERPROFILE")?;
-	println!("{}", user_profile_dir);
-
-	for (key, value) in std::env::vars() {
-		println!("{}: {}", key, value);
+impl std::error::Error for MyStringError {
+	fn description(&self) -> &str {
+		&self.message
 	}
-	return Ok(());
-	std::env::set_var("AWS_ACCESS_KEY_ID", "xxxxx");
-	std::env::set_var("AWS_SECRET_ACCESS_KEY", "xxxxx");
+}
 
-	// クライアントの作成
-	let mut client = get_s3_client();
-	let mut _request = rusoto_s3::PutObjectRequest::default();
+struct MyS3ClientImpl {
+	client: Box<rusoto_s3::S3Client>,
+}
 
-	// initialize object
-	let data = r#"{
+impl MyS3ClientImpl {
+	pub fn configure() -> Result<MyS3ClientImpl, Box<dyn std::error::Error>> {
+		let client = rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
+		let instance = MyS3ClientImpl { client: Box::new(client) };
+		let conf = lib::configuration::Configuration {};
+		let result = conf.configure();
+		if result.is_err() {
+			let err = result.err();
+			println!("[ERROR] {:?}", err);
+			return Err(Box::new(MyStringError {
+				message: "続行不能なエラーです。".to_string(),
+			}));
+		}
+		// self.client = rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
+		return Ok(instance);
+	}
+
+	fn get_s3_client(&self) -> &rusoto_s3::S3Client {
+		return &self.client;
+		// return rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
+	}
+
+	/// オブジェクトを列挙
+	async fn list_objects(&self, s3: &dyn rusoto_s3::S3) {
+		println!("[TRACE] オブジェクトを列挙");
+		let request = rusoto_s3::ListObjectsRequest::default();
+		let result = s3.list_objects(request);
+		let result = result.await;
+		if result.is_err() {
+			println!("[ERROR] {:?}", result.err().unwrap());
+			return;
+		}
+		let result = result.ok().unwrap();
+		println!("{:?}", result);
+	}
+
+	/// オブジェクトを送信
+	async fn put_object(s3: &dyn rusoto_s3::S3) {
+		println!("[TRACE] オブジェクトを作成");
+
+		// リクエストオブジェクトを作成
+		let data = r#"{
         "name": "ジミ ヘンドリックス",
         "age": 28,
         "address": "東京都練馬区練馬1-1-1"
     }"#;
-	let value: serde_json::Value = serde_json::from_str(&data).unwrap();
+		let value: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-	let mut request = rusoto_s3::PutObjectRequest::default();
-	// request.bucket = String::from("d.techtouch.jp");
-	request.bucket = String::from("my-bucket-20200901");
-	request.key = String::from("/tmp/dummy.json");
-	request.body = Some(format!("{}", value).into_bytes().into());
+		let mut request = rusoto_s3::PutObjectRequest::default();
+		request.bucket = String::from("my-bucket-20200901");
+		request.key = String::from("/tmp/dummy.json");
+		request.body = Some(format!("{}", value).into_bytes().into());
 
-	list_objects(&client);
+		// リクエスト
+		let result = s3.put_object(request);
+		let result = result.await;
+		if result.is_err() {
+			println!("[ERROR] {:?}", result.err().unwrap());
+			return;
+		}
+		let result = result.ok().unwrap();
+		println!("{:?}", result);
+	}
 
-	// client.
-	// request.await;
-	// request.await;
-	// client.into();
-	// client.sync(request).sync().unwrap();
+	#[allow(unreachable_code)]
+	#[allow(unused_must_use)]
+	pub async fn put_object_example(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
+		// クライアントの作成
+		let client = self.get_s3_client();
 
-	// client.
+		// リクエストオブジェクトを作成
+		let data = r#"{
+        "name": "ジミ ヘンドリックス",
+        "age": 28,
+        "address": "東京都練馬区練馬1-1-1"
+    }"#;
+		let value: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-	// アップロード
-	// let _result = client.put_object(request).sync().unwrap();
+		let mut request = rusoto_s3::PutObjectRequest::default();
+		request.bucket = String::from("my-bucket-20200901");
+		request.key = String::from("/tmp/dummy.json");
+		request.body = Some(format!("{}", value).into_bytes().into());
 
-	println!("Hello, world!");
+		// 列挙
+		if false {
+			// let client = client as dyn rusoto_s3::S3;
+			self.list_objects(&client).await;
+		}
 
-	return Ok(());
+		// アップロード
+		if true {
+			let _result = self.put_object(&client).await;
+		}
+
+		println!("Hello, world!");
+
+		return Ok(());
+	}
 }
 
+/// エントリーポイント
 fn main() {
-	let conf = lib::configuration::Configuration {};
-	let result = conf.configure();
-	if result.is_err() {
-		let err = result.err();
-		println!("[ERROR] {:?}", err);
+	let s3 = MyS3ClientImpl::configure();
+	if !s3.configure() {
 		return;
 	}
-	let _result = async {
-		let _result = put_object_example().await;
-		let _result = _result.unwrap();
-		println!("{:?}", _result);
-	};
+	{
+		let future = s3.put_object_example();
+		// async_std::task::block_on(future);
+		let result = futures::executor::block_on(future);
+		if result.is_err() {
+			println!("[ERROR] {}", result.err().unwrap());
+			return;
+		}
+	}
 }
