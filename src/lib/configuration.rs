@@ -13,7 +13,9 @@ fn get_credentials_path() -> std::result::Result<String, Box<dyn std::error::Err
 	return Ok(path);
 }
 
+/// コンフィギュレーション構造体
 impl Configuration {
+	/// コンフィギュレーション
 	pub fn configure(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
 		// credentials の場所
 		let path = get_credentials_path()?;
@@ -27,6 +29,9 @@ impl Configuration {
 			for e in r.lines() {
 				let line: String = e?;
 				let line = line.trim();
+				if line.starts_with("#") {
+					continue;
+				}
 				if line.starts_with("[") {
 					let section = between(line, "[", "]");
 					if section == "" {
@@ -38,6 +43,11 @@ impl Configuration {
 				}
 				println!("[TRACE] 通常の行: [{}]", line);
 			}
+		}
+
+		if false {
+			std::env::set_var("AWS_ACCESS_KEY_ID", "xxxxx");
+			std::env::set_var("AWS_SECRET_ACCESS_KEY", "xxxxx");
 		}
 
 		return Ok(());
