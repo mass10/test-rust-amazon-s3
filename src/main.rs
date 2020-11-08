@@ -32,8 +32,9 @@ struct MyS3ClientImpl {
 }
 
 impl MyS3ClientImpl {
+	/// コンフィギュレーション
 	pub fn configure() -> Result<MyS3ClientImpl, Box<dyn std::error::Error>> {
-		let client = rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
+		let client = rusoto_s3::S3Client::new(rusoto_core::Region::ApNortheast1);
 		let instance = MyS3ClientImpl { client: Box::new(client) };
 		let conf = lib::configuration::Configuration {};
 		let result = conf.configure();
@@ -44,31 +45,38 @@ impl MyS3ClientImpl {
 				message: "続行不能なエラーです。".to_string(),
 			}));
 		}
-		// self.client = rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
 		return Ok(instance);
 	}
 
 	fn get_s3_client(&self) -> &rusoto_s3::S3Client {
 		return &self.client;
-		// return rusoto_s3::S3Client::new(rusoto_core::Region::UsEast1);
+	}
+
+	fn get_s3(&mut self) -> &dyn rusoto_s3::S3 {
+		let client = self.get_s3_client();
+		return client;
 	}
 
 	/// オブジェクトを列挙
-	async fn list_objects(&self, s3: &dyn rusoto_s3::S3) {
-		println!("[TRACE] オブジェクトを列挙");
-		let request = rusoto_s3::ListObjectsRequest::default();
+	fn list_objects(&mut self) {
+		let s3: &dyn rusoto_s3::S3 = self.get_s3();
+		let mut request = rusoto_s3::ListObjectsRequest::default();
+		request.bucket = "my-bucket-20200901".to_string();
+		// request.key = "dummy.json".to_string();
+		// request.bucket = "".to_string();
 		let result = s3.list_objects(request);
-		let result = result.await;
+		let result = tokio::runtime::Runtime::new().expect("ERROR").block_on(result);
 		if result.is_err() {
 			println!("[ERROR] {:?}", result.err().unwrap());
 			return;
 		}
 		let result = result.ok().unwrap();
+
 		println!("{:?}", result);
 	}
 
 	/// オブジェクトを送信
-	async fn put_object(s3: &dyn rusoto_s3::S3) {
+	fn put_object(&mut self) -> std::result::Result<(), Box<dyn std::error::Error>> {
 		println!("[TRACE] オブジェクトを作成");
 
 		// リクエストオブジェクトを作成
@@ -78,72 +86,52 @@ impl MyS3ClientImpl {
         "address": "東京都練馬区練馬1-1-1"
     }"#;
 		let value: serde_json::Value = serde_json::from_str(&data).unwrap();
+		// let value = format!("{}", value);
+		let value = format!("{}", value);
 
 		let mut request = rusoto_s3::PutObjectRequest::default();
-		request.bucket = String::from("my-bucket-20200901");
-		request.key = String::from("/tmp/dummy.json");
-		request.body = Some(format!("{}", value).into_bytes().into());
+		// request.content_type = Some(String::from("application/json"));
+		request.bucket = "my-bucket-20200901".to_string();
+		request.key = "dummy.json".to_string();
+		request.body = Some(value.into_bytes().into());
 
 		// リクエスト
+		println!("[TRACE] S3 PUT");
+		let s3 = self.get_s3();
 		let result = s3.put_object(request);
-		let result = result.await;
+		let result = tokio::runtime::Runtime::new().expect("ERROR").block_on(result);
 		if result.is_err() {
-			println!("[ERROR] {:?}", result.err().unwrap());
-			return;
+			println!("[ERROR] オブジェクトの保存に失敗しました。理由: {:?}", result.err().unwrap());
+			return Ok(());
 		}
 		let result = result.ok().unwrap();
 		println!("{:?}", result);
-	}
-
-	#[allow(unreachable_code)]
-	#[allow(unused_must_use)]
-	pub async fn put_object_example(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
-		// クライアントの作成
-		let client = self.get_s3_client();
-
-		// リクエストオブジェクトを作成
-		let data = r#"{
-        "name": "ジミ ヘンドリックス",
-        "age": 28,
-        "address": "東京都練馬区練馬1-1-1"
-    }"#;
-		let value: serde_json::Value = serde_json::from_str(&data).unwrap();
-
-		let mut request = rusoto_s3::PutObjectRequest::default();
-		request.bucket = String::from("my-bucket-20200901");
-		request.key = String::from("/tmp/dummy.json");
-		request.body = Some(format!("{}", value).into_bytes().into());
-
-		// 列挙
-		if false {
-			// let client = client as dyn rusoto_s3::S3;
-			self.list_objects(&client).await;
-		}
-
-		// アップロード
-		if true {
-			let _result = self.put_object(&client).await;
-		}
-
-		println!("Hello, world!");
-
 		return Ok(());
 	}
 }
 
 /// エントリーポイント
+// #[tokio::main]
 fn main() {
-	let s3 = MyS3ClientImpl::configure();
-	if !s3.configure() {
+	// コンフィギュレーションと初期化
+	let result = MyS3ClientImpl::configure();
+	if result.is_err() {
+		println!("[ERROR] {}", result.err().unwrap());
 		return;
 	}
-	{
-		let future = s3.put_object_example();
-		// async_std::task::block_on(future);
-		let result = futures::executor::block_on(future);
-		if result.is_err() {
-			println!("[ERROR] {}", result.err().unwrap());
-			return;
-		}
+
+	let mut client = result.ok().unwrap();
+
+	// Amazon S3 へオブジェクトを作成します。
+	if true {
+		let result = client.put_object();
+		println!("[TRACE] <main()> {:?}", result);
 	}
+
+	if true {
+		let result = client.list_objects();
+		println!("[TRACE] <main()> {:?}", result);
+	}
+
+	println!("[TRACE] Ok.");
 }
