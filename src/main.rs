@@ -57,22 +57,54 @@ impl MyS3ClientImpl {
 		return client;
 	}
 
-	/// オブジェクトを列挙
-	fn list_objects(&mut self) {
+	/// オブジェクトを列挙します。
+	fn list_objects_example(&mut self) -> std::result::Result<(), Box<dyn std::error::Error>> {
+		let bucket_name = "my-bucket-20200901";
 		let s3: &dyn rusoto_s3::S3 = self.get_s3();
+
+		println!("[TRACE] オブジェクトを列挙しています...");
 		let mut request = rusoto_s3::ListObjectsRequest::default();
 		request.bucket = "my-bucket-20200901".to_string();
+		request.bucket = bucket_name.to_string();
 		// request.key = "dummy.json".to_string();
 		// request.bucket = "".to_string();
 		let result = s3.list_objects(request);
 		let result = tokio::runtime::Runtime::new().expect("ERROR").block_on(result);
 		if result.is_err() {
 			println!("[ERROR] {:?}", result.err().unwrap());
-			return;
+			return Ok(());
 		}
 		let result = result.ok().unwrap();
-
+		// アイテムの取り出し方がわからない。単純に for e in result {} できないようだ。
 		println!("{:?}", result);
+
+		return Ok(());
+	}
+
+	/// ？？？
+	fn list_parts_example(&mut self) -> std::result::Result<(), Box<dyn std::error::Error>> {
+		let bucket_name = "my-bucket-20200901";
+		let s3: &dyn rusoto_s3::S3 = self.get_s3();
+
+		println!("[TRACE] オブジェクトを列挙しています...");
+
+		let mut request = rusoto_s3::ListPartsRequest::default();
+		request.bucket = "my-bucket-20200901".to_string();
+		request.bucket = bucket_name.to_string();
+		let result = s3.list_parts(request);
+		let result = tokio::runtime::Runtime::new().expect("ERROR").block_on(result)?;
+		for e in result.parts {
+			println!("[TRACE] {:?}", e);
+		}
+		// for e in result {}
+		// let key_count = result.key_count.unwrap();
+		// let item: rusoto_s3::listobject = result;
+		// let item = result[0];
+		// for e in result {
+		// 	println!("[TRACE] {:?}", e);
+		// }
+
+		return Ok(());
 	}
 
 	/// オブジェクトを送信
@@ -123,14 +155,19 @@ fn main() {
 	let mut client = result.ok().unwrap();
 
 	// Amazon S3 へオブジェクトを作成します。
-	if true {
-		let result = client.put_object();
-		println!("[TRACE] <main()> {:?}", result);
+	let result = client.put_object();
+	if result.is_err() {
+		println!("[TRACE] <main()> {}", result.err().unwrap());
 	}
 
-	if true {
-		let result = client.list_objects();
-		println!("[TRACE] <main()> {:?}", result);
+	let result = client.list_objects_example();
+	if result.is_err() {
+		println!("[TRACE] <main()> {}", result.err().unwrap());
+	}
+
+	let result = client.list_parts_example();
+	if result.is_err() {
+		println!("[TRACE] <main()> {}", result.err().unwrap());
 	}
 
 	println!("[TRACE] Ok.");
